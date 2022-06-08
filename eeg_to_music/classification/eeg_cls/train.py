@@ -109,11 +109,11 @@ def main(args) -> None:
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--batch_size", default=4, type=int)
+    parser.add_argument("--batch_size", default=1, type=int)
     parser.add_argument("--num_workers", default=12, type=int)
     parser.add_argument("--fusion_type", default='eeg', type=str)
     # runner 
-    parser.add_argument("--lr", default=1e-4, type=float)
+    parser.add_argument("--lr", default=5e-4, type=float)
     # trainer
     parser.add_argument("--max_epochs", default=200, type=int)
     parser.add_argument("--gpus", default=[0], type=list)

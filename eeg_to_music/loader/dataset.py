@@ -19,11 +19,11 @@ class DEAP_Dataset(Dataset):
             
     def __getitem__(self, index):
         item = self.fl[index]
-        data = item['data']
-        label = item['label']
+        data = item['data'].astype(np.float32)
+        label = item['label'].astype(np.float32)
         subject = item['subject']
         trial = item['trial']
-        return data, label, subject, trial
-
+        return torch.from_numpy(data), torch.from_numpy(label), subject, trial
+        
     def __len__(self):
         return len(self.fl)
