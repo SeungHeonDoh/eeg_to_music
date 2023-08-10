@@ -4,6 +4,7 @@ wandb/
 *.pt
 *.png
 env/
+notebook/
 exp/
 grid_search/
 lightning_logs/

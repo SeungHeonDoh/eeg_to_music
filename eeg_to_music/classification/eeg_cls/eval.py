@@ -3,6 +3,7 @@ import os
 from argparse import ArgumentParser, Namespace, ArgumentTypeError
 from pathlib import Path
 
+import torch
 from omegaconf import DictConfig, OmegaConf
 from pytorch_lightning import Trainer, seed_everything
 from pytorch_lightning.callbacks import EarlyStopping, ModelCheckpoint, LearningRateMonitor
@@ -22,33 +23,6 @@ def str2bool(v):
     else:
         raise ArgumentTypeError('Boolean value expected.')
 
-def get_tensorboard_logger(args: Namespace):
-    logger = TensorBoardLogger(
-        save_dir=f"exp/test", name=args.supervisions, version=f"test/"
-    )
-    return logger
-
-def get_checkpoint_callback(save_path):
-    prefix = save_path
-    suffix = "best"
-    checkpoint_callback = ModelCheckpoint(
-        dirpath=prefix,
-        filename=suffix,
-        save_top_k=1,
-        save_last= False,
-        monitor="val_loss",
-        mode="min",
-        save_weights_only=True,
-        verbose=True,
-    )
-    return checkpoint_callback
-
-def get_early_stop_callback():
-    early_stop_callback = EarlyStopping(
-        monitor="val_loss", min_delta=0.00, patience=20, verbose=True, mode="min"
-    )
-    return early_stop_callback
-
 def save_hparams(args, save_path):
     save_config = OmegaConf.create(vars(args))
     os.makedirs(save_path, exist_ok=True)
@@ -59,12 +33,6 @@ def main(args):
         seed_everything(42)
 
     save_path = f"exp/{args.fusion_type}/{args.feature_type}_{args.label_type}"
-    save_hparams(args, save_path)
-
-    # wandb.init(config=args)
-    # wandb.run.name = f"test"
-    # args = wandb.config
-
     pipeline = DataPipeline(
             feature_type = args.feature_type,
             label_type = args.label_type,
@@ -75,7 +43,7 @@ def main(args):
         n_class = 4
     else:
         n_class = 2
-
+    
     model = FusionModel(
                 eeg_feature_dim=2016,
                 audio_feature_dim=13,
@@ -83,46 +51,40 @@ def main(args):
                 hidden_dim=64,
     )
     
-
     runner = EEGCls(
             model = model,
             fusion_type = args.fusion_type,
             lr = args.lr, 
     )
-    # logger = WandbLogger()
-    checkpoint_callback = get_checkpoint_callback(save_path)
-    early_stop_callback = get_early_stop_callback()
-    lr_monitor_callback = LearningRateMonitor(logging_interval='step')
+    state_dict = torch.load(os.path.join(save_path, "best.ckpt"), map_location="cpu")
+    runner.load_state_dict(state_dict.get("state_dict"))
     trainer = Trainer(
                     max_epochs= args.max_epochs,
                     num_nodes= args.num_nodes,
                     accelerator='gpu',
                     strategy = args.strategy,
                     devices= args.gpus,
-                    # strategy = DDPPlugin(find_unused_parameters=True),
-                    # logger=logger,
-                    # log_every_n_steps=1,
                     sync_batchnorm=True,
                     resume_from_checkpoint=None,
                     replace_sampler_ddp=False,
-                    callbacks=[
-                        early_stop_callback,
-                        checkpoint_callback,
-                        lr_monitor_callback
-                    ],
                 )
-    trainer.fit(runner, datamodule=pipeline)
+    trainer.test(runner, datamodule=pipeline)
+    torch.save(runner.embedding, os.path.join(save_path, f"{args.data_type}_{args.label_type}_inference.pt"))
+    with open(Path(save_path, f"{args.data_type}_{args.label_type}_results.json"), mode="w") as io:
+        json.dump(runner.results, io, indent=4)
+    print("finish save")
+
 
 if __name__ == "__main__":
     parser = ArgumentParser()
-    parser.add_argument("--batch_size", default=16, type=int)
-    parser.add_argument("--num_workers", default=4, type=int)
     parser.add_argument("--fusion_type", default='intra', type=str)
     parser.add_argument("--data_type", default='deap', type=str)
     parser.add_argument("--label_type", default='v', type=str)
     parser.add_argument("--feature_type", default='psd', type=str)
+    parser.add_argument("--batch_size", default=1, type=int)
+    parser.add_argument("--num_workers", default=12, type=int)
     # runner 
-    parser.add_argument("--lr", default=1e-3, type=float)
+    parser.add_argument("--lr", default=5e-4, type=float)
     # trainer
     parser.add_argument("--max_epochs", default=200, type=int)
     parser.add_argument("--gpus", default=[0], type=list)

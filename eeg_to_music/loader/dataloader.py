@@ -5,28 +5,36 @@ from torch.utils.data import DataLoader, Dataset, SubsetRandomSampler, BatchSamp
 from eeg_to_music.loader.dataset import DEAP_Dataset
 
 class DataPipeline(LightningDataModule):
-    def __init__(self, batch_size, num_workers) -> None:
+    def __init__(self, feature_type, label_type, batch_size, num_workers) -> None:
         super(DataPipeline, self).__init__()
         self.dataset_builder = DEAP_Dataset        
         self.batch_size = batch_size
+        self.feature_type = feature_type
+        self.label_type = label_type
         self.num_workers = num_workers
 
     def setup(self, stage: Optional[str] = None):
         if stage == "fit" or stage is None:
             self.train_dataset = DataPipeline.get_dataset(
                 self.dataset_builder,
-                split = "TRAIN"
+                split = "TRAIN",
+                feature_type = self.feature_type,
+                label_type = self.label_type
             )
 
             self.val_dataset = DataPipeline.get_dataset(
                 self.dataset_builder,
-                split = "VALID"
+                split = "VALID",
+                feature_type = self.feature_type,
+                label_type = self.label_type
             )
 
         if stage == "test" or stage is None:
             self.test_dataset = DataPipeline.get_dataset(
                 self.dataset_builder,
-                split = "TEST"
+                split = "TEST",
+                feature_type = self.feature_type,
+                label_type = self.label_type
             )
 
     def train_dataloader(self) -> DataLoader:
@@ -54,8 +62,8 @@ class DataPipeline(LightningDataModule):
         )
 
     @classmethod
-    def get_dataset(cls, dataset_builder: Callable, split) -> Dataset:
-        dataset = dataset_builder(split)
+    def get_dataset(cls, dataset_builder: Callable, split, feature_type, label_type) -> Dataset:
+        dataset = dataset_builder(split, feature_type, label_type)
         return dataset
 
     @classmethod
